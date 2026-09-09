@@ -1,0 +1,16 @@
+{
+  "name": "PoQuer del Barça",
+  "short_name": "PoQuer Barça",
+  "description": "Lliga familiar de porres dels partits del FC Barcelona",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0f1d",
+  "theme_color": "#002855",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
