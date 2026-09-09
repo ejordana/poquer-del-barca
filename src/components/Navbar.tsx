@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useUser } from '@/context/UserContext';
+import { InstallAppButton } from './InstallAppButton';
 import { Home, Trophy, Calendar, Shield, Users, RefreshCw } from 'lucide-react';
 
 export function Navbar() {
@@ -56,7 +57,8 @@ export function Navbar() {
           </nav>
 
           {/* Selector de familiar actiu */}
-          <div className="flex items-center">
+          <div className="flex items-center gap-2">
+            <InstallAppButton />
             {currentUser ? (
               <button
                 type="button"
