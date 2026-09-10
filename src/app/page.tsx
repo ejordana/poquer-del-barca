@@ -13,6 +13,7 @@ export default function HomePage() {
   const { currentUser } = useUser();
   const [nextMatch, setNextMatch] = useState<Match | null>(null);
   const [userBet, setUserBet] = useState<Bet | null>(null);
+  const [nextMatchBets, setNextMatchBets] = useState<Bet[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -48,7 +49,19 @@ export default function HomePage() {
         setUserBet(null);
       }
 
-      // 3. Classificació
+      // 3. Totes les porres del pròxim partit (per veure qui ha apostat)
+      if (next) {
+        const { data: allBets } = await supabase
+          .from('bets')
+          .select('*, profile:profiles(*)')
+          .eq('match_id', next.id);
+
+        setNextMatchBets((allBets as Bet[]) || []);
+      } else {
+        setNextMatchBets([]);
+      }
+
+      // 4. Classificació
       const { data: leadData } = await supabase
         .from('leaderboard')
         .select('*')
@@ -93,6 +106,7 @@ export default function HomePage() {
           <MatchCard
             match={nextMatch}
             userBet={userBet}
+            familyBets={nextMatchBets}
             onBetUpdated={loadData}
           />
         ) : (

@@ -43,16 +43,16 @@ export default function PartitsPage() {
         });
         setUserBets(betsMap);
 
-        // Obtenir porres de la família per als partits ja iniciats
-        const startedMatchIds = allMatches
-          .filter((m) => new Date(m.match_date) <= new Date() || m.status !== 'scheduled')
-          .map((m) => m.id);
+        // Obtenir totes les porres de la família per a tots els partits.
+        // La MatchCard s'encarrega d'amagar les prediccions fins que el partit comença;
+        // abans només mostra qui ja ha apostat.
+        const matchIds = allMatches.map((m) => m.id);
 
-        if (startedMatchIds.length > 0) {
+        if (matchIds.length > 0) {
           const { data: allFamilyBets } = await supabase
             .from('bets')
             .select('*, profile:profiles(*)')
-            .in('match_id', startedMatchIds);
+            .in('match_id', matchIds);
 
           const famMap: Record<string, Bet[]> = {};
           allFamilyBets?.forEach((b: any) => {

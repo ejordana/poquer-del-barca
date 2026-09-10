@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Match, Profile } from '@/types/database';
 import { useUser } from '@/context/UserContext';
 import { AdminMatchEditor } from '@/components/AdminMatchEditor';
-import { AdminFamilyBetsEditor } from '@/components/AdminFamilyBetsEditor';
+// import { AdminFamilyBetsEditor } from '@/components/AdminFamilyBetsEditor'; // Amagat de moment
 import { Shield, KeyRound, Users, UserPlus, Trash2, CheckCircle2 } from 'lucide-react';
 
 const ADMIN_PIN = '1899'; // Any de fundació del Barça
@@ -180,12 +180,14 @@ export default function AdminPage() {
         </span>
       </div>
 
-      {/* 1. Editor de Porres de tota la família (per a partits passats o actuals) */}
-      <AdminFamilyBetsEditor
+      {/* 1. Editor de Porres de tota la família (per a partits passats o actuals)
+             Amagat de moment: les porres anteriors ja s'han introduït.
+             Per reactivar-lo, descomenta aquest bloc. */}
+      {/* <AdminFamilyBetsEditor
         matches={matches}
         profiles={profiles}
         onSaved={loadMatches}
-      />
+      /> */}
 
       {/* 2. Editor de Partits i Resultats Oficials */}
       <AdminMatchEditor matches={matches} onMatchesChanged={loadMatches} />

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Match, Bet } from '@/types/database';
 import { getPointsBadgeInfo } from '@/lib/scoring';
 import { BetModal } from './BetModal';
@@ -23,11 +23,35 @@ export function MatchCard({
   const { currentUser, setIsSelectorOpen } = useUser();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFamilyBets, setShowFamilyBets] = useState(false);
+  const [nowTs, setNowTs] = useState(() => Date.now());
+
+  // Mantenim l'última versió d'onBetUpdated en una ref perquè el temporitzador
+  // no s'hagi de reprogramar cada cop que el pare es torna a dibuixar.
+  const onBetUpdatedRef = useRef(onBetUpdated);
+  onBetUpdatedRef.current = onBetUpdated;
 
   const isHome = match.home_away === 'HOME';
   const matchDate = new Date(match.match_date);
-  const isStarted = matchDate <= new Date() || match.status !== 'scheduled';
+  const isStarted = matchDate.getTime() <= nowTs || match.status !== 'scheduled';
   const isFinished = match.status === 'finished';
+
+  // Destapa les porres automàticament a l'hora d'inici, sense haver de recarregar.
+  // Programem un temporitzador just per al moment del xiulet inicial.
+  useEffect(() => {
+    if (match.status !== 'scheduled') return;
+    const msUntilStart = new Date(match.match_date).getTime() - Date.now();
+    if (msUntilStart <= 0) return;
+
+    // setTimeout té un límit pràctic (~24,8 dies); el capem per evitar overflow.
+    const delay = Math.min(msUntilStart, 2_147_483_000) + 500;
+    const timer = setTimeout(() => {
+      setNowTs(Date.now());
+      // Refresquem les dades per recollir porres fetes a última hora.
+      onBetUpdatedRef.current?.();
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [match.match_date, match.status]);
 
   // Format natural en català (ex: Diumenge, 15 març a les 21:00h)
   const dateFormatted = new Intl.DateTimeFormat('ca-ES', {
@@ -183,15 +207,18 @@ export function MatchCard({
           </div>
         </div>
 
-        {/* Desplegable de les porres dels familiars un cop començat el partit */}
-        {isStarted && familyBets.length > 0 && (
+        {/* Desplegable de les porres: abans del partit només mostra qui ha apostat;
+            un cop començat, mostra també les prediccions i els punts. */}
+        {familyBets.length > 0 && (
           <div className="mt-3 pt-2 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setShowFamilyBets(!showFamilyBets)}
               className="flex items-center justify-between w-full text-sm font-semibold text-slate-700 hover:text-slate-900 py-1 transition-colors"
             >
-              <span>Porres de la família ({familyBets.length})</span>
+              <span>
+                {isStarted ? 'Porres de la família' : 'Qui ja ha fet la porra'} ({familyBets.length})
+              </span>
               {showFamilyBets ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
             </button>
 
@@ -206,17 +233,26 @@ export function MatchCard({
                     >
                       <span className="flex items-center gap-1.5 text-slate-900">
                         {bet.profile?.nom || 'Familiar'}
-                        {bet.is_joker && <Sparkles className="w-3.5 h-3.5 text-violet-500" />}
+                        {isStarted && bet.is_joker && <Sparkles className="w-3.5 h-3.5 text-violet-500" />}
                       </span>
                       <div className="flex items-center gap-2.5">
-                        <span className="font-bold text-base text-slate-900">
-                          {isHome
-                            ? `${bet.predicted_goals_barca} - ${bet.predicted_goals_rival}`
-                            : `${bet.predicted_goals_rival} - ${bet.predicted_goals_barca}`}
-                        </span>
-                        {betPoints && (
-                          <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">
-                            {betPoints.text}
+                        {isStarted ? (
+                          <>
+                            <span className="font-bold text-base text-slate-900">
+                              {isHome
+                                ? `${bet.predicted_goals_barca} - ${bet.predicted_goals_rival}`
+                                : `${bet.predicted_goals_rival} - ${bet.predicted_goals_barca}`}
+                            </span>
+                            {betPoints && (
+                              <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">
+                                {betPoints.text}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs font-bold text-slate-400">
+                            <Lock className="w-3.5 h-3.5" />
+                            Amagada
                           </span>
                         )}
                       </div>

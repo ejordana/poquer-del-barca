@@ -44,14 +44,24 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         .order('nom', { ascending: true });
 
       if (!error && data && data.length > 0) {
-        setProfiles(data as Profile[]);
+        const list = data as Profile[];
+        setProfiles(list);
 
-        // Si tenim un usuari guardat a localStorage, recuperar-lo de la llista actualitzada
+        // Si tenim un usuari guardat a localStorage, recuperar-lo de la llista actualitzada.
+        // Comparem primer per id i, si no hi ha coincidència (id antic d'un seed/perfil
+        // provisional anterior), per nom — que és UNIQUE a la BD. Així recuperem el perfil
+        // real i corregim l'id desat perquè les porres es lliguin correctament.
         const savedId = typeof window !== 'undefined' ? localStorage.getItem('porres_user_id') : null;
-        if (savedId) {
-          const found = (data as Profile[]).find((p) => p.id === savedId);
+        const savedName = typeof window !== 'undefined' ? localStorage.getItem('porres_user_name') : null;
+        if (savedId || savedName) {
+          const found =
+            list.find((p) => p.id === savedId) || list.find((p) => p.nom === savedName);
           if (found) {
             setCurrentUser(found);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('porres_user_id', found.id);
+              localStorage.setItem('porres_user_name', found.nom);
+            }
             return;
           }
         }
