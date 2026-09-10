@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { LeaderboardEntry } from '@/types/database';
 import { LeaderboardTable } from '@/components/LeaderboardTable';
-import { SCORING_RULES } from '@/lib/scoring';
+import { SCORING_RULES, sortLeaderboard, computeRanks } from '@/lib/scoring';
 import { Trophy, HelpCircle, Loader2, Ham } from 'lucide-react';
 
 export default function ClassificacioPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [previousRanks, setPreviousRanks] = useState<Record<string, number> | undefined>(undefined);
   const [loading, setLoading] = useState(true);
 
   const supabase = createClient();
@@ -19,8 +20,50 @@ export default function ClassificacioPage() {
         .from('leaderboard')
         .select('*');
 
-      if (data) {
-        setEntries(data as LeaderboardEntry[]);
+      const entriesData = (data as LeaderboardEntry[]) || [];
+      setEntries(entriesData);
+
+      // Calcular el moviment respecte a l'última jornada: reconstruïm la
+      // classificació TAL COM ERA abans de l'últim partit finalitzat, restant
+      // els punts que aquell partit va aportar a cada usuari.
+      const { data: finished } = await supabase
+        .from('matches')
+        .select('id')
+        .eq('status', 'finished')
+        .order('match_date', { ascending: false });
+
+      // Cal com a mínim 2 partits finalitzats perquè el "abans" sigui significatiu.
+      if (entriesData.length > 0 && finished && finished.length >= 2) {
+        const lastMatchId = finished[0].id;
+        const { data: lastBets } = await supabase
+          .from('bets')
+          .select('user_id, points_earned')
+          .eq('match_id', lastMatchId);
+
+        const lastPointsByUser: Record<string, number> = {};
+        (lastBets || []).forEach((b: any) => {
+          if (b.points_earned !== null) lastPointsByUser[b.user_id] = b.points_earned;
+        });
+
+        const previousEntries = entriesData.map((e) => {
+          const p = lastPointsByUser[e.user_id] ?? null;
+          return {
+            ...e,
+            total_points: e.total_points - (p ?? 0),
+            exact_hits: e.exact_hits - (p !== null && p >= SCORING_RULES.EXACT_SCORE ? 1 : 0),
+            outcome_hits: e.outcome_hits - (p === SCORING_RULES.CORRECT_OUTCOME ? 1 : 0),
+          };
+        });
+
+        const sortedPrev = sortLeaderboard(previousEntries);
+        const prevRankArr = computeRanks(sortedPrev);
+        const prevRanks: Record<string, number> = {};
+        sortedPrev.forEach((e, i) => {
+          prevRanks[e.user_id] = prevRankArr[i];
+        });
+        setPreviousRanks(prevRanks);
+      } else {
+        setPreviousRanks(undefined);
       }
     } catch (err) {
       console.error('Error carregant la classificació:', err);
@@ -72,7 +115,7 @@ export default function ClassificacioPage() {
           <span className="text-sm font-medium">Actualitzant classificació...</span>
         </div>
       ) : (
-        <LeaderboardTable entries={entries} />
+        <LeaderboardTable entries={entries} previousRanks={previousRanks} />
       )}
 
       {/* Targeta senzilla de com sumen els punts */}
@@ -82,7 +125,7 @@ export default function ClassificacioPage() {
           Com es guanyen els punts?
         </h3>
 
-        <div className="grid gap-2.5 sm:grid-cols-3">
+        <div className="grid gap-2.5 sm:grid-cols-2">
           <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-100">
             <div className="flex items-center justify-between mb-1">
               <span className="font-bold text-slate-900 text-xs flex items-center gap-1">
@@ -96,13 +139,23 @@ export default function ClassificacioPage() {
             </p>
           </div>
 
+          <div className="p-3.5 rounded-2xl bg-sky-50 border border-sky-100">
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-bold text-slate-900 text-xs">Signe + Diferència</span>
+              <span className="font-bold text-sky-700 text-sm">+{SCORING_RULES.GOAL_DIFF} punts</span>
+            </div>
+            <p className="text-xs text-slate-600">
+              Encertes el resultat i la diferència de gols, però no el marcador (ex: poses 2-0 i acaba 3-1).
+            </p>
+          </div>
+
           <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-100">
             <div className="flex items-center justify-between mb-1">
               <span className="font-bold text-slate-900 text-xs">Signe (1X2)</span>
               <span className="font-bold text-amber-700 text-sm">+{SCORING_RULES.CORRECT_OUTCOME} punt</span>
             </div>
             <p className="text-xs text-slate-600">
-              Encertes qui guanya o si empaten (ex: poses 2-0 i acaba 1-0).
+              Encertes només qui guanya o si empaten (ex: poses 2-0 i acaba 1-0).
             </p>
           </div>
 

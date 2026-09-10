@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 ALTER TABLE public.profiles ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_color TEXT DEFAULT '#004D98';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
 -- Inserció automàtica dels 9 membres de la família
 INSERT INTO public.profiles (nom, avatar_color, is_admin) VALUES
@@ -104,6 +105,7 @@ DECLARE
   m_goals_rival INTEGER;
   m_status TEXT;
   exact_pts INTEGER := 3;
+  diff_pts INTEGER := 2;
   outcome_pts INTEGER := 1;
   miss_pts INTEGER := 0;
 BEGIN
@@ -126,13 +128,17 @@ BEGIN
     -- 1. Marcador exacte (3 punts, o 3 + gols totals del partit si es juga el comodí JoQuer)
     WHEN predicted_goals_barca = m_goals_barca AND predicted_goals_rival = m_goals_rival THEN
       exact_pts + (CASE WHEN is_joker THEN (m_goals_barca + m_goals_rival) ELSE 0 END)
-    -- 2. Encert de victòria del Barça (1 punt)
+    -- 2. Encert del signe I de la diferència de gols (2 punts).
+    --    Si les diferències coincideixen, el signe també coincideix per força
+    --    (inclou els empats amb marcador diferent, on la diferència és 0 = 0).
+    WHEN (predicted_goals_barca - predicted_goals_rival) = (m_goals_barca - m_goals_rival) THEN diff_pts
+    -- 3. Encert de victòria del Barça (1 punt)
     WHEN (predicted_goals_barca > predicted_goals_rival) AND (m_goals_barca > m_goals_rival) THEN outcome_pts
-    -- 3. Encert d'empat (1 punt)
+    -- 4. Encert d'empat (1 punt)
     WHEN (predicted_goals_barca = predicted_goals_rival) AND (m_goals_barca = m_goals_rival) THEN outcome_pts
-    -- 4. Encert de derrota del Barça (1 punt)
+    -- 5. Encert de derrota del Barça (1 punt)
     WHEN (predicted_goals_barca < predicted_goals_rival) AND (m_goals_barca < m_goals_rival) THEN outcome_pts
-    -- 5. Fallada (0 punts)
+    -- 6. Fallada (0 punts)
     ELSE miss_pts
   END,
   updated_at = NOW()
@@ -160,21 +166,29 @@ CREATE TRIGGER on_match_score_updated
   FOR EACH ROW EXECUTE FUNCTION public.trigger_recalculate_points();
 
 -- 5. VISTA CLASSIFICACIÓ (LEADERBOARD)
-CREATE OR REPLACE VIEW public.leaderboard AS
-SELECT 
+-- Fem DROP + CREATE (en lloc de CREATE OR REPLACE) perquè el conjunt de
+-- columnes ha canviat respecte a versions anteriors i Postgres no permet
+-- renombrar/reordenar columnes amb CREATE OR REPLACE VIEW.
+DROP VIEW IF EXISTS public.leaderboard;
+CREATE VIEW public.leaderboard AS
+SELECT
   p.id AS user_id,
   p.nom,
+  p.avatar_url,
   p.avatar_color,
   p.is_admin,
   COALESCE(SUM(b.points_earned), 0)::INTEGER AS total_points,
   COUNT(b.id)::INTEGER AS bets_count,
-  COUNT(CASE WHEN b.points_earned = 3 THEN 1 END)::INTEGER AS exact_hits,
+  COUNT(CASE WHEN b.points_earned >= 3 THEN 1 END)::INTEGER AS exact_hits,
+  COUNT(CASE WHEN b.points_earned = 2 THEN 1 END)::INTEGER AS diff_hits,
   COUNT(CASE WHEN b.points_earned = 1 THEN 1 END)::INTEGER AS outcome_hits,
   COUNT(CASE WHEN b.points_earned = 0 THEN 1 END)::INTEGER AS misses
 FROM public.profiles p
 LEFT JOIN public.bets b ON p.id = b.user_id AND b.points_earned IS NOT NULL
-GROUP BY p.id, p.nom, p.avatar_color, p.is_admin
+GROUP BY p.id, p.nom, p.avatar_url, p.avatar_color, p.is_admin
 ORDER BY total_points DESC, exact_hits DESC, outcome_hits DESC, p.nom ASC;
+
+GRANT SELECT ON public.leaderboard TO anon, authenticated;
 
 -- ====================================================================
 -- 6. PERMISOS I ROW LEVEL SECURITY (RLS)

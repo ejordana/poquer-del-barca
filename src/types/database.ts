@@ -62,6 +62,7 @@ export interface LeaderboardEntry {
   total_points: number;
   bets_count: number;
   exact_hits: number;
+  diff_hits: number;
   outcome_hits: number;
   misses: number;
 }

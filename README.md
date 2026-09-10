@@ -34,8 +34,10 @@ L'aplicació està preconfigurada per als 9 membres de la família:
 | Encert | Punts | Descripció |
 | :--- | :---: | :--- |
 | **Marcador exacte (Plena!)** | **3 pts** | Encertes exactament els gols (ex: aposta 3-1 i resultat 3-1). |
-| **Signe (1X2)** | **1 pt** | Encertes qui guanya o si empaten, però no els gols exactes. |
+| **Signe + diferència** | **2 pts** | Encertes el resultat i la diferència de gols, però no el marcador (ex: aposta 2-0 i acaba 3-1; inclou empats com 1-1 vs 2-2). |
+| **Signe (1X2)** | **1 pt** | Encertes només qui guanya o si empaten, però no la diferència de gols. |
 | **Fallada** | **0 pts** | No encertes ni el signe ni el resultat. |
+| **Comodí JoQuer** 🃏 | **3 + gols totals** | Si actives el comodí i encertes el marcador exacte, sumes 3 pts més els gols totals del partit. |
 
 ### Regles
 - Es pot canviar la porra tants cops com es vulgui fins al minut d'inici del partit.

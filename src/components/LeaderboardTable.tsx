@@ -2,13 +2,16 @@
 
 import { LeaderboardEntry } from '@/types/database';
 import { useUser } from '@/context/UserContext';
-import { Trophy, Ham, Flame } from 'lucide-react';
+import { computeRanks } from '@/lib/scoring';
+import { Trophy, Ham, Target, Flame, ChevronUp, ChevronDown, Minus } from 'lucide-react';
 
 interface LeaderboardTableProps {
   entries: LeaderboardEntry[];
+  /** Posició de cada usuari abans de l'última jornada (user_id -> posició). */
+  previousRanks?: Record<string, number>;
 }
 
-export function LeaderboardTable({ entries }: LeaderboardTableProps) {
+export function LeaderboardTable({ entries, previousRanks }: LeaderboardTableProps) {
   const { currentUser } = useUser();
 
   if (entries.length === 0) {
@@ -26,19 +29,8 @@ export function LeaderboardTable({ entries }: LeaderboardTableProps) {
   // Calculem la posició tenint en compte els empats: si dos jugadors tenen
   // exactament els mateixos punts, plenes i signes, comparteixen posició
   // (ex: dos "1r"), en lloc de desempatar-los artificialment.
-  const ranks: number[] = [];
-  entries.forEach((item, index) => {
-    if (index === 0) {
-      ranks.push(1);
-      return;
-    }
-    const prev = entries[index - 1];
-    const tied =
-      item.total_points === prev.total_points &&
-      item.exact_hits === prev.exact_hits &&
-      item.outcome_hits === prev.outcome_hits;
-    ranks.push(tied ? ranks[index - 1] : index + 1);
-  });
+  // La vista `leaderboard` ja ve ordenada amb aquests mateixos criteris.
+  const ranks = computeRanks(entries);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs">
@@ -46,6 +38,17 @@ export function LeaderboardTable({ entries }: LeaderboardTableProps) {
         {entries.map((item, index) => {
           const isCurrentUser = currentUser?.id === item.user_id || currentUser?.nom === item.nom;
           const rank = ranks[index];
+
+          // Moviment respecte a l'última jornada (si en tenim referència).
+          const prevRank = previousRanks?.[item.user_id];
+          const movement: 'up' | 'down' | 'same' | null =
+            previousRanks && prevRank !== undefined
+              ? prevRank > rank
+                ? 'up'
+                : prevRank < rank
+                ? 'down'
+                : 'same'
+              : null;
 
           return (
             <div
@@ -56,16 +59,29 @@ export function LeaderboardTable({ entries }: LeaderboardTableProps) {
             >
               {/* Posició i Nom */}
               <div className="flex items-center gap-3 min-w-0">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center">
-                  {rank === 1 ? (
-                    <span className="text-base" title="1r lloc">🥇</span>
-                  ) : rank === 2 ? (
-                    <span className="text-base" title="2n lloc">🥈</span>
-                  ) : rank === 3 ? (
-                    <span className="text-base" title="3r lloc">🥉</span>
-                  ) : (
-                    <span className="text-slate-400 font-semibold text-sm">{rank}</span>
-                  )}
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <div className="flex h-7 w-7 items-center justify-center">
+                    {rank === 1 ? (
+                      <span className="text-base" title="1r lloc">🥇</span>
+                    ) : rank === 2 ? (
+                      <span className="text-base" title="2n lloc">🥈</span>
+                    ) : rank === 3 ? (
+                      <span className="text-base" title="3r lloc">🥉</span>
+                    ) : (
+                      <span className="text-slate-400 font-semibold text-sm">{rank}</span>
+                    )}
+                  </div>
+
+                  {/* Indicador de moviment respecte a l'última jornada */}
+                  <span className="flex w-3.5 justify-center">
+                    {movement === 'up' ? (
+                      <ChevronUp className="w-4 h-4 text-emerald-500" strokeWidth={3} aria-label="Puja posicions" />
+                    ) : movement === 'down' ? (
+                      <ChevronDown className="w-4 h-4 text-rose-500" strokeWidth={3} aria-label="Baixa posicions" />
+                    ) : movement === 'same' ? (
+                      <Minus className="w-3 h-3 text-slate-300" strokeWidth={3} aria-label="Es manté igual" />
+                    ) : null}
+                  </span>
                 </div>
 
                 <div className="min-w-0">
@@ -83,7 +99,10 @@ export function LeaderboardTable({ entries }: LeaderboardTableProps) {
                     <span className="flex items-center gap-0.5 text-emerald-700" title="Plenes (marcador exacte) — pernil en joc! 🍖">
                       <Ham className="w-3 h-3" /> {item.exact_hits}
                     </span>
-                    <span className="flex items-center gap-0.5 text-amber-700">
+                    <span className="flex items-center gap-0.5 text-sky-700" title="Signe + diferència de gols (2 punts)">
+                      <Target className="w-3 h-3" /> {item.diff_hits}
+                    </span>
+                    <span className="flex items-center gap-0.5 text-amber-700" title="Només signe (1 punt)">
                       <Flame className="w-3 h-3" /> {item.outcome_hits}
                     </span>
                   </div>

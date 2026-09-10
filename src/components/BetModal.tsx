@@ -216,7 +216,9 @@ export function BetModal({ match, currentBet, isOpen, onClose, onSaved }: BetMod
 
         {/* Consell de punts clar */}
         <p className="text-xs text-center text-slate-500 font-medium mb-4 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-          Marcador exacte = <strong>3 punts</strong> | Encerta guanyador o empat = <strong>1 punt</strong>
+          Exacte = <strong>{SCORING_RULES.EXACT_SCORE} punts</strong> · Signe + diferència ={' '}
+          <strong>{SCORING_RULES.GOAL_DIFF} punts</strong> · Només signe ={' '}
+          <strong>{SCORING_RULES.CORRECT_OUTCOME} punt</strong>
         </p>
 
         {/* Comodí JoQuer */}
