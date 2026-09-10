@@ -55,7 +55,7 @@ export function getPointsBadgeInfo(points: number | null) {
     return { text: `+${points} pts (JoQuer! 🃏)`, color: 'bg-violet-500/20 text-violet-300 border border-violet-500/30' };
   }
   if (points === SCORING_RULES.EXACT_SCORE) {
-    return { text: `+${points} pts (Plena!)`, color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' };
+    return { text: `+${points} pts (Plena! 🍖)`, color: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' };
   }
   if (points === SCORING_RULES.CORRECT_OUTCOME) {
     return { text: `+${points} pt (Signe)`, color: 'bg-amber-500/20 text-amber-300 border border-amber-500/30' };

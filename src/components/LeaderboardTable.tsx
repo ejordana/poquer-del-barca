@@ -2,7 +2,7 @@
 
 import { LeaderboardEntry } from '@/types/database';
 import { useUser } from '@/context/UserContext';
-import { Trophy, Target, Flame } from 'lucide-react';
+import { Trophy, Ham, Flame } from 'lucide-react';
 
 interface LeaderboardTableProps {
   entries: LeaderboardEntry[];
@@ -80,8 +80,8 @@ export function LeaderboardTable({ entries }: LeaderboardTableProps) {
                     )}
                   </div>
                   <div className="flex items-center gap-2 text-[11px] text-slate-500 font-semibold">
-                    <span className="flex items-center gap-0.5 text-emerald-700">
-                      <Target className="w-3 h-3" /> {item.exact_hits}
+                    <span className="flex items-center gap-0.5 text-emerald-700" title="Plenes (marcador exacte) — pernil en joc! 🍖">
+                      <Ham className="w-3 h-3" /> {item.exact_hits}
                     </span>
                     <span className="flex items-center gap-0.5 text-amber-700">
                       <Flame className="w-3 h-3" /> {item.outcome_hits}

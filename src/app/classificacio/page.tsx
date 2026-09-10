@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { LeaderboardEntry } from '@/types/database';
 import { LeaderboardTable } from '@/components/LeaderboardTable';
 import { SCORING_RULES } from '@/lib/scoring';
-import { Trophy, HelpCircle, Loader2 } from 'lucide-react';
+import { Trophy, HelpCircle, Loader2, Ham } from 'lucide-react';
 
 export default function ClassificacioPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -85,11 +85,14 @@ export default function ClassificacioPage() {
         <div className="grid gap-2.5 sm:grid-cols-3">
           <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-100">
             <div className="flex items-center justify-between mb-1">
-              <span className="font-bold text-slate-900 text-xs">Marcador Exacte</span>
+              <span className="font-bold text-slate-900 text-xs flex items-center gap-1">
+                <Ham className="w-3.5 h-3.5 text-emerald-700" />
+                Marcador Exacte
+              </span>
               <span className="font-bold text-emerald-700 text-sm">+{SCORING_RULES.EXACT_SCORE} punts</span>
             </div>
             <p className="text-xs text-slate-600">
-              Encertes exactament els gols (ex: poses 3-1 i queda 3-1).
+              Encertes exactament els gols (ex: poses 3-1 i queda 3-1). Fer el ple = pernil! 🍖
             </p>
           </div>
 
