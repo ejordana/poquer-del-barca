@@ -101,6 +101,17 @@ export function calculateBetPoints(
 }
 
 /**
+ * Descripció textual dels punts que sumaria una porra ARA MATEIX si el
+ * partit en joc acabés amb el marcador actual (encara no és definitiu).
+ */
+export function getLivePointsBadgeInfo(points: number) {
+  return {
+    text: `${points > 0 ? '+' : ''}${points} ${points === 1 ? 'pt' : 'pts'} ara`,
+    color: 'bg-sky-100 text-sky-800 border border-sky-200',
+  };
+}
+
+/**
  * Retorna una descripció textual en català del premi de punts
  */
 export function getPointsBadgeInfo(points: number | null) {

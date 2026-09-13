@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Match, Bet } from '@/types/database';
-import { getPointsBadgeInfo } from '@/lib/scoring';
+import { calculateBetPoints, getLivePointsBadgeInfo, getPointsBadgeInfo } from '@/lib/scoring';
 import { BetModal } from './BetModal';
 import { useUser } from '@/context/UserContext';
 import { Calendar, MapPin, ChevronDown, ChevronUp, Lock, CheckCircle2, Sparkles, RefreshCw } from 'lucide-react';
@@ -67,7 +67,20 @@ export function MatchCard({
     hour12: false,
   }).format(matchDate);
 
-  const pointsInfo = isFinished && userBet ? getPointsBadgeInfo(userBet.points_earned) : null;
+  const isLive = !isFinished && isStarted && match.goals_barca !== null && match.goals_rival !== null;
+
+  const pointsInfo = isFinished && userBet
+    ? getPointsBadgeInfo(userBet.points_earned)
+    : isLive && userBet
+    ? getLivePointsBadgeInfo(
+        calculateBetPoints(
+          userBet.predicted_goals_barca,
+          userBet.predicted_goals_rival,
+          match.goals_barca as number,
+          match.goals_rival as number
+        )
+      )
+    : null;
 
   const handleRefreshScore = async () => {
     setIsRefreshing(true);
@@ -193,7 +206,7 @@ export function MatchCard({
                       : `${match.goals_rival} - ${match.goals_barca}`}
                   </span>
                 )}
-                <span className="text-xs font-bold text-rose-600 uppercase tracking-widest">
+                <span className="text-xs font-bold text-rose-600 uppercase tracking-widest whitespace-nowrap">
                   En Joc
                 </span>
                 <button
@@ -241,7 +254,11 @@ export function MatchCard({
                     </span>
                   )}
                   {pointsInfo && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        isLive ? pointsInfo.color : 'bg-emerald-100 text-emerald-800'
+                      }`}
+                    >
                       {pointsInfo.text}
                     </span>
                   )}
@@ -307,7 +324,18 @@ export function MatchCard({
             {showFamilyBets && (
               <div className="mt-2.5 space-y-2 animate-in fade-in duration-150">
                 {familyBets.map((bet) => {
-                  const betPoints = isFinished ? getPointsBadgeInfo(bet.points_earned) : null;
+                  const betPoints = isFinished
+                    ? getPointsBadgeInfo(bet.points_earned)
+                    : isLive
+                    ? getLivePointsBadgeInfo(
+                        calculateBetPoints(
+                          bet.predicted_goals_barca,
+                          bet.predicted_goals_rival,
+                          match.goals_barca as number,
+                          match.goals_rival as number
+                        )
+                      )
+                    : null;
                   return (
                     <div
                       key={bet.id}
@@ -324,7 +352,11 @@ export function MatchCard({
                             : `${bet.predicted_goals_rival} - ${bet.predicted_goals_barca}`}
                         </span>
                         {betPoints && (
-                          <span className="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-white border border-slate-200 text-slate-700">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-lg text-xs font-bold ${
+                              isLive ? betPoints.color : 'bg-white border border-slate-200 text-slate-700'
+                            }`}
+                          >
                             {betPoints.text}
                           </span>
                         )}
