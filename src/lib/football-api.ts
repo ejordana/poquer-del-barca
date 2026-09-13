@@ -57,7 +57,7 @@ export async function fetchBarcaMatchesFromApi(apiKey: string): Promise<Normaliz
     headers: {
       'X-Auth-Token': apiKey,
     },
-    next: { revalidate: 60 }, // Cache d'1 minut a Next.js
+    cache: 'no-store', // El llindar d'1 minut ja el controlem via sync_state
   });
 
   if (!res.ok) {
