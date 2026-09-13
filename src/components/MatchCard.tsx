@@ -25,6 +25,7 @@ export function MatchCard({
   const [showFamilyBets, setShowFamilyBets] = useState(false);
   const [nowTs, setNowTs] = useState(() => Date.now());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   // Mantenim l'última versió d'onBetUpdated en una ref perquè el temporitzador
   // no s'hagi de reprogramar cada cop que el pare es torna a dibuixar.
@@ -82,17 +83,30 @@ export function MatchCard({
       )
     : null;
 
-  const handleRefreshScore = async () => {
+  const handleRefreshScore = async (silent = false) => {
     setIsRefreshing(true);
+    if (!silent) setRefreshError(null);
     try {
-      await fetch('/api/sync-matches', {
+      const res = await fetch('/api/sync-matches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || `Error del servidor (${res.status})`);
+      }
+
+      if (data.skipped && !silent) {
+        setRefreshError('Ja s\'ha sincronitzat fa menys d\'un minut, torna-ho a provar en uns segons.');
+      }
+
       onBetUpdatedRef.current?.();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error refrescant el marcador:', err);
+      if (!silent) setRefreshError(err.message || 'No s\'ha pogut refrescar el marcador.');
     } finally {
       setIsRefreshing(false);
     }
@@ -115,7 +129,7 @@ export function MatchCard({
     const tick = () => {
       const now = Date.now();
       if (now >= windowStart && now <= windowEnd) {
-        handleRefreshScoreRef.current();
+        handleRefreshScoreRef.current(true);
       }
     };
 
@@ -211,13 +225,18 @@ export function MatchCard({
                 </span>
                 <button
                   type="button"
-                  onClick={handleRefreshScore}
+                  onClick={() => handleRefreshScore(false)}
                   disabled={isRefreshing}
                   aria-label="Refrescar marcador"
                   className="mt-1 flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 transition-all active:scale-90 disabled:opacity-50"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
                 </button>
+                {refreshError && (
+                  <span className="mt-1 max-w-[110px] text-center text-[10px] font-semibold text-rose-500 leading-tight">
+                    {refreshError}
+                  </span>
+                )}
               </div>
             ) : (
               <span className="text-sm font-bold text-slate-300">VS</span>
