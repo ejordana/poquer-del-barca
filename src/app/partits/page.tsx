@@ -7,12 +7,16 @@ import { MatchCard } from '@/components/MatchCard';
 import { useUser } from '@/context/UserContext';
 import { Calendar, Loader2 } from 'lucide-react';
 
+const PAGE_SIZE = 3;
+
 export default function PartitsPage() {
   const { currentUser } = useUser();
   const [matches, setMatches] = useState<Match[]>([]);
   const [userBets, setUserBets] = useState<Record<string, Bet>>({});
   const [familyBets, setFamilyBets] = useState<Record<string, Bet[]>>({});
   const [tab, setTab] = useState<'upcoming' | 'finished'>('upcoming');
+  const [competitionFilter, setCompetitionFilter] = useState<string>('all');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
 
   const supabase = createClient();
@@ -73,10 +77,22 @@ export default function PartitsPage() {
     loadData();
   }, [tab, currentUser?.id]);
 
+  // Reiniciar la paginació quan es canvia de pestanya o de filtre de competició
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [tab, competitionFilter]);
+
+  const competitions = Array.from(new Set(matches.map((m) => m.competition))).sort();
+
   const filteredMatches = matches.filter((m) => {
     const isFinished = m.status === 'finished';
-    return tab === 'finished' ? isFinished : !isFinished;
+    const matchesTab = tab === 'finished' ? isFinished : !isFinished;
+    const matchesCompetition = competitionFilter === 'all' || m.competition === competitionFilter;
+    return matchesTab && matchesCompetition;
   });
+
+  const visibleMatches = filteredMatches.slice(0, visibleCount);
+  const hasMore = filteredMatches.length > visibleCount;
 
   return (
     <div className="space-y-5">
@@ -116,6 +132,37 @@ export default function PartitsPage() {
         </button>
       </div>
 
+      {/* Filtre de competició */}
+      {competitions.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setCompetitionFilter('all')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+              competitionFilter === 'all'
+                ? 'bg-barca-blue text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Totes les competicions
+          </button>
+          {competitions.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCompetitionFilter(c)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                competitionFilter === c
+                  ? 'bg-barca-blue text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Llistat */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-16 text-slate-400">
@@ -133,7 +180,7 @@ export default function PartitsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredMatches.map((m) => (
+          {visibleMatches.map((m) => (
             <MatchCard
               key={m.id}
               match={m}
@@ -142,6 +189,16 @@ export default function PartitsPage() {
               onBetUpdated={loadData}
             />
           ))}
+
+          {hasMore && (
+            <button
+              type="button"
+              onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              className="w-full h-11 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition-all active:scale-95"
+            >
+              Carregar més partits
+            </button>
+          )}
         </div>
       )}
     </div>

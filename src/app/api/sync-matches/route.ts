@@ -25,16 +25,43 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const useSample = Boolean(body.sample);
     const apiKey = process.env.FOOTBALL_DATA_API_KEY;
+    const willCallRealApi = !useSample && !!apiKey && apiKey !== 'your_football_data_api_key_here';
 
     let matchesToSync: NormalizedMatch[] = [];
 
-    if (!useSample && apiKey && apiKey !== 'your_football_data_api_key_here') {
+    if (willCallRealApi) {
+      // Evitem trucar dues vegades a football-data.org dins del mateix minut
+      // (protegim el límit de peticions/minut del pla gratuït).
+      const { data: syncState } = await supabase
+        .from('sync_state')
+        .select('last_synced_at')
+        .eq('id', 1)
+        .maybeSingle();
+
+      const now = new Date();
+      const lastSyncedAt = syncState?.last_synced_at ? new Date(syncState.last_synced_at) : null;
+      const sameMinute =
+        lastSyncedAt && Math.floor(lastSyncedAt.getTime() / 60000) === Math.floor(now.getTime() / 60000);
+
+      if (sameMinute) {
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          message: "Ja s'havia sincronitzat amb l'API fa menys d'un minut. S'evita repetir la crida.",
+        });
+      }
+
       try {
-        matchesToSync = await fetchBarcaMatchesFromApi(apiKey);
+        matchesToSync = await fetchBarcaMatchesFromApi(apiKey!);
       } catch (apiErr: any) {
         console.warn('Error amb football-data.org API, usant dades de mostra com a alternativa:', apiErr.message);
         matchesToSync = getSampleBarcaMatches();
       }
+
+      await supabase
+        .from('sync_state')
+        .update({ last_synced_at: now.toISOString() })
+        .eq('id', 1);
     } else {
       matchesToSync = getSampleBarcaMatches();
     }
@@ -63,11 +90,35 @@ export async function POST(request: Request) {
         }
       }
 
+      // Si no hem trobat res per external_id, comprovem si el partit ja
+      // s'havia introduït a mà (sense external_id) el mateix dia, per
+      // evitar duplicar-lo (independentment del nom del rival).
+      if (!existingMatchId) {
+        const matchDay = new Date(match.match_date);
+        const dayStart = new Date(matchDay);
+        dayStart.setUTCHours(0, 0, 0, 0);
+        const dayEnd = new Date(matchDay);
+        dayEnd.setUTCHours(23, 59, 59, 999);
+
+        const { data: possibleDuplicate } = await supabase
+          .from('matches')
+          .select('id')
+          .is('external_id', null)
+          .gte('match_date', dayStart.toISOString())
+          .lte('match_date', dayEnd.toISOString())
+          .maybeSingle();
+
+        if (possibleDuplicate) {
+          existingMatchId = possibleDuplicate.id;
+        }
+      }
+
       if (existingMatchId) {
         // Actualitzar dades (especialment resultat i estat)
         const { error } = await supabase
           .from('matches')
           .update({
+            external_id: match.external_id,
             competition: match.competition,
             rival: match.rival,
             rival_logo: match.rival_logo,

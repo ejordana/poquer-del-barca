@@ -5,7 +5,7 @@ import { Match, Bet } from '@/types/database';
 import { getPointsBadgeInfo } from '@/lib/scoring';
 import { BetModal } from './BetModal';
 import { useUser } from '@/context/UserContext';
-import { Calendar, MapPin, ChevronDown, ChevronUp, Lock, CheckCircle2, Sparkles } from 'lucide-react';
+import { Calendar, MapPin, ChevronDown, ChevronUp, Lock, CheckCircle2, Sparkles, RefreshCw } from 'lucide-react';
 
 interface MatchCardProps {
   match: Match;
@@ -24,6 +24,7 @@ export function MatchCard({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFamilyBets, setShowFamilyBets] = useState(false);
   const [nowTs, setNowTs] = useState(() => Date.now());
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Mantenim l'última versió d'onBetUpdated en una ref perquè el temporitzador
   // no s'hagi de reprogramar cada cop que el pare es torna a dibuixar.
@@ -68,9 +69,69 @@ export function MatchCard({
 
   const pointsInfo = isFinished && userBet ? getPointsBadgeInfo(userBet.points_earned) : null;
 
+  const handleRefreshScore = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetch('/api/sync-matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      onBetUpdatedRef.current?.();
+    } catch (err) {
+      console.error('Error refrescant el marcador:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleRefreshScoreRef = useRef(handleRefreshScore);
+  handleRefreshScoreRef.current = handleRefreshScore;
+
+  // Auto-refresc del marcador: entre el minut 50 i les 2 hores des de l'inici
+  // (tram en què sol jugar-se la segona part i el resultat encara pot canviar),
+  // consultem l'API cada minut. L'endpoint ja evita crides repetides dins del
+  // mateix minut si hi ha diversos usuaris amb la pantalla oberta alhora.
+  useEffect(() => {
+    if (isFinished) return;
+
+    const kickoff = new Date(match.match_date).getTime();
+    const windowStart = kickoff + 50 * 60_000;
+    const windowEnd = kickoff + 2 * 60 * 60_000;
+
+    const tick = () => {
+      const now = Date.now();
+      if (now >= windowStart && now <= windowEnd) {
+        handleRefreshScoreRef.current();
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 60_000);
+    return () => clearInterval(interval);
+  }, [match.match_date, isFinished]);
+
+  const matchResult =
+    isFinished && match.goals_barca !== null && match.goals_rival !== null
+      ? match.goals_barca > match.goals_rival
+        ? 'win'
+        : match.goals_barca < match.goals_rival
+        ? 'loss'
+        : 'draw'
+      : null;
+
+  const resultStyles =
+    matchResult === 'win'
+      ? 'bg-emerald-50 border-emerald-100 hover:border-emerald-200'
+      : matchResult === 'draw'
+      ? 'bg-amber-50 border-amber-100 hover:border-amber-200'
+      : matchResult === 'loss'
+      ? 'bg-rose-50 border-rose-100 hover:border-rose-200'
+      : 'bg-white border-slate-200 hover:border-slate-300';
+
   return (
     <>
-      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-xs hover:border-slate-300 transition-all">
+      <div className={`relative overflow-hidden rounded-2xl border p-4 shadow-xs transition-all ${resultStyles}`}>
         {/* Capçalera de competició i data */}
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-slate-500 mb-3 pb-2 border-b border-slate-100">
           <div className="flex items-center gap-2">
@@ -107,19 +168,51 @@ export function MatchCard({
                     ? `${match.goals_barca} - ${match.goals_rival}`
                     : `${match.goals_rival} - ${match.goals_barca}`}
                 </span>
-                <span className="mt-0.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 uppercase">
-                  Final
+                <span
+                  className={`mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                    matchResult === 'win'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : matchResult === 'loss'
+                      ? 'bg-rose-100 text-rose-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {matchResult === 'win' ? 'Victòria' : matchResult === 'loss' ? 'Derrota' : 'Empat'}
                 </span>
               </div>
-            ) : match.status === 'live' ? (
+            ) : isStarted ? (
               <div className="flex flex-col items-center">
-                <span className="relative flex h-3.5 w-3.5 mb-1">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-rose-500"></span>
-                </span>
-                <span className="text-xs font-bold text-rose-600 uppercase tracking-widest">
-                  Directe
-                </span>
+                {match.status === 'live' ? (
+                  <>
+                    <span className="relative flex h-3.5 w-3.5 mb-1">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-rose-500"></span>
+                    </span>
+                    {match.goals_barca !== null && match.goals_rival !== null && (
+                      <span className="text-lg font-bold text-slate-900 tracking-tight">
+                        {isHome
+                          ? `${match.goals_barca} - ${match.goals_rival}`
+                          : `${match.goals_rival} - ${match.goals_barca}`}
+                      </span>
+                    )}
+                    <span className="text-xs font-bold text-rose-600 uppercase tracking-widest">
+                      Directe
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-center leading-tight">
+                    Per confirmar
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleRefreshScore}
+                  disabled={isRefreshing}
+                  aria-label="Refrescar marcador"
+                  className="mt-1 flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 transition-all active:scale-90 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                </button>
               </div>
             ) : (
               <span className="text-sm font-bold text-slate-300">VS</span>

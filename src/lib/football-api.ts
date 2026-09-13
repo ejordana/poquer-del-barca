@@ -77,9 +77,13 @@ export async function fetchBarcaMatchesFromApi(apiKey: string): Promise<Normaliz
     let goalsBarca: number | null = null;
     let goalsRival: number | null = null;
 
-    if (m.status === 'FINISHED' && fullTime) {
-      goalsBarca = isHome ? fullTime.home : fullTime.away;
-      goalsRival = isHome ? fullTime.away : fullTime.home;
+    const halfTime = m.score?.halfTime;
+    const isLiveOrFinished = m.status === 'FINISHED' || m.status === 'IN_PLAY' || m.status === 'PAUSED';
+    const currentScore = fullTime?.home !== null && fullTime?.home !== undefined ? fullTime : halfTime;
+
+    if (isLiveOrFinished && currentScore) {
+      goalsBarca = isHome ? currentScore.home : currentScore.away;
+      goalsRival = isHome ? currentScore.away : currentScore.home;
     }
 
     return {
