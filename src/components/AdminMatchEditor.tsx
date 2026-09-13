@@ -129,7 +129,9 @@ export function AdminMatchEditor({ matches, onMatchesChanged }: AdminMatchEditor
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error en sincronitzar');
 
-      setSyncMessage(`${data.message} (${data.stats?.inserted} nous, ${data.stats?.updated} actualitzats)`);
+      setSyncMessage(
+        `${data.message} (${data.stats?.inserted} nous, ${data.stats?.updated} actualitzats, ${data.stats?.pointsCalculated ?? 0} amb punts calculats)`
+      );
       onMatchesChanged();
     } catch (err: any) {
       setSyncMessage('Error: ' + err.message);

@@ -4,6 +4,7 @@ import './globals.css';
 import { UserProvider } from '@/context/UserContext';
 import { Navbar } from '@/components/Navbar';
 import { UserSelectorModal } from '@/components/UserSelectorModal';
+import { PointsNotifier } from '@/components/PointsNotifier';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -16,7 +17,8 @@ export const metadata: Metadata = {
   description: 'La lliga de porres dels partits del FC Barcelona per a tota la família.',
   manifest: '/manifest.json',
   icons: {
-    icon: '/icon.svg',
+    icon: '/icon.png',
+    apple: '/icon.png',
   },
 };
 
@@ -37,6 +39,7 @@ export default function RootLayout({
       <body className={`${inter.className} min-h-screen bg-slate-50 text-slate-900 flex flex-col antialiased selection:bg-barca-blue selection:text-white pb-24 md:pb-10 font-sans`}>
         <UserProvider>
           <Navbar />
+          <PointsNotifier />
           <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-6">
             {children}
           </main>

@@ -73,6 +73,7 @@ export async function POST(request: Request) {
     // 3. Upsert a la base de dades
     let insertedCount = 0;
     let updatedCount = 0;
+    let pointsCalculatedCount = 0;
 
     for (const match of matchesToSync) {
       // Buscar si ja existeix per external_id
@@ -131,10 +132,21 @@ export async function POST(request: Request) {
           })
           .eq('id', existingMatchId);
 
-        if (!error) updatedCount++;
+        if (!error) {
+          updatedCount++;
+
+          // Si el partit ja ha finalitzat, calculem (o recalculem) els punts
+          // de totes les porres fetes per aquest partit.
+          if (match.status === 'finished') {
+            const { error: rpcErr } = await supabase.rpc('calculate_match_points', {
+              target_match_id: existingMatchId,
+            });
+            if (!rpcErr) pointsCalculatedCount++;
+          }
+        }
       } else {
         // Inserir nou partit
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from('matches')
           .insert({
             external_id: match.external_id,
@@ -146,9 +158,20 @@ export async function POST(request: Request) {
             goals_barca: match.goals_barca,
             goals_rival: match.goals_rival,
             status: match.status,
-          });
+          })
+          .select('id')
+          .single();
 
-        if (!error) insertedCount++;
+        if (!error) {
+          insertedCount++;
+
+          if (match.status === 'finished' && inserted) {
+            const { error: rpcErr } = await supabase.rpc('calculate_match_points', {
+              target_match_id: inserted.id,
+            });
+            if (!rpcErr) pointsCalculatedCount++;
+          }
+        }
       }
     }
 
@@ -159,6 +182,7 @@ export async function POST(request: Request) {
         totalReceived: matchesToSync.length,
         inserted: insertedCount,
         updated: updatedCount,
+        pointsCalculated: pointsCalculatedCount,
         source: !useSample && apiKey ? 'football-data.org' : 'mostra',
       },
     });
