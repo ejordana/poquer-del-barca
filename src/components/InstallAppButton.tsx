@@ -15,6 +15,14 @@ export function InstallAppButton() {
   const [showIOSHelp, setShowIOSHelp] = useState(false);
 
   useEffect(() => {
+    // Cal un service worker registrat perquè Chrome/Android consideri el lloc
+    // instal·lable com a PWA i llenci l'esdeveniment 'beforeinstallprompt'.
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.warn('Error registrant el service worker:', err);
+      });
+    }
+
     const standalone =
       window.matchMedia('(display-mode: standalone)').matches ||
       (window.navigator as any).standalone === true;
