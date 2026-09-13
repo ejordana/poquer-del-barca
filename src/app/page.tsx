@@ -14,6 +14,9 @@ export default function HomePage() {
   const [nextMatch, setNextMatch] = useState<Match | null>(null);
   const [userBet, setUserBet] = useState<Bet | null>(null);
   const [nextMatchBets, setNextMatchBets] = useState<Bet[]>([]);
+  const [upcomingMatch, setUpcomingMatch] = useState<Match | null>(null);
+  const [upcomingUserBet, setUpcomingUserBet] = useState<Bet | null>(null);
+  const [upcomingMatchBets, setUpcomingMatchBets] = useState<Bet[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,17 +39,22 @@ export default function HomePage() {
           .select('*')
           .gte('match_date', startOfTodayIso)
           .order('match_date', { ascending: true })
-          .limit(1),
+          .limit(2),
         supabase.from('leaderboard').select('*').limit(3),
       ]);
 
       const next = matches && matches.length > 0 ? (matches[0] as Match) : null;
+      // Si el partit que es mostra ja ha acabat, mostrem també el següent
+      // perquè no calgui esperar a l'endemà per veure'l.
+      const upcoming =
+        next?.status === 'finished' && matches && matches.length > 1 ? (matches[1] as Match) : null;
       setNextMatch(next);
+      setUpcomingMatch(upcoming);
       if (leadData) setLeaderboard(leadData as LeaderboardEntry[]);
 
-      // 2. Porra de l'usuari i porres de tota la família per al pròxim partit,
-      // també en paral·lel (una no depèn de l'altra).
-      const [betResult, allBetsResult] = await Promise.all([
+      // 2. Porra de l'usuari i porres de tota la família per al pròxim partit
+      // (i pel següent, si també el mostrem), tot en paral·lel.
+      const [betResult, allBetsResult, upcomingBetResult, upcomingAllBetsResult] = await Promise.all([
         currentUser && next
           ? supabase
               .from('bets')
@@ -58,10 +66,23 @@ export default function HomePage() {
         next
           ? supabase.from('bets').select('*, profile:profiles(*)').eq('match_id', next.id)
           : Promise.resolve({ data: [] }),
+        currentUser && upcoming
+          ? supabase
+              .from('bets')
+              .select('*')
+              .eq('user_id', currentUser.id)
+              .eq('match_id', upcoming.id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        upcoming
+          ? supabase.from('bets').select('*, profile:profiles(*)').eq('match_id', upcoming.id)
+          : Promise.resolve({ data: [] }),
       ]);
 
       setUserBet((betResult.data as Bet | null) ?? null);
       setNextMatchBets((allBetsResult.data as Bet[]) || []);
+      setUpcomingUserBet((upcomingBetResult.data as Bet | null) ?? null);
+      setUpcomingMatchBets((upcomingAllBetsResult.data as Bet[]) || []);
     } catch (err) {
       console.error('Error carregant dades:', err);
     } finally {
@@ -110,6 +131,15 @@ export default function HomePage() {
               Pots carregar els partits des de la pestanya <strong>Admin</strong>.
             </p>
           </div>
+        )}
+
+        {upcomingMatch && (
+          <MatchCard
+            match={upcomingMatch}
+            userBet={upcomingUserBet}
+            familyBets={upcomingMatchBets}
+            onBetUpdated={loadData}
+          />
         )}
       </section>
 
