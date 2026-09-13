@@ -126,7 +126,7 @@ export function Navbar() {
             }`}
           >
             <Trophy className="w-6 h-6 stroke-[2.5]" />
-            <span className="text-xs font-bold">Rànquing</span>
+            <span className="text-xs font-bold">Classificació</span>
           </Link>
 
           <Link
