@@ -163,7 +163,7 @@ export function MatchCard({
           <div className="col-span-1 flex flex-col items-center justify-center">
             {isFinished && match.goals_barca !== null && match.goals_rival !== null ? (
               <div className="flex flex-col items-center">
-                <span className="text-lg font-bold text-slate-900 tracking-tight">
+                <span className="text-lg font-bold text-slate-900 tracking-tight whitespace-nowrap">
                   {isHome
                     ? `${match.goals_barca} - ${match.goals_rival}`
                     : `${match.goals_rival} - ${match.goals_barca}`}
@@ -187,7 +187,7 @@ export function MatchCard({
                   <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-rose-500"></span>
                 </span>
                 {match.goals_barca !== null && match.goals_rival !== null && (
-                  <span className="text-lg font-bold text-slate-900 tracking-tight">
+                  <span className="text-lg font-bold text-slate-900 tracking-tight whitespace-nowrap">
                     {isHome
                       ? `${match.goals_barca} - ${match.goals_rival}`
                       : `${match.goals_rival} - ${match.goals_barca}`}
