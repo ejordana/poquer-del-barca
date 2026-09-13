@@ -88,15 +88,15 @@ export function MatchCard({
   const handleRefreshScoreRef = useRef(handleRefreshScore);
   handleRefreshScoreRef.current = handleRefreshScore;
 
-  // Auto-refresc del marcador: entre el minut 50 i les 2 hores des de l'inici
-  // (tram en què sol jugar-se la segona part i el resultat encara pot canviar),
-  // consultem l'API cada minut. L'endpoint ja evita crides repetides dins del
-  // mateix minut si hi ha diversos usuaris amb la pantalla oberta alhora.
+  // Auto-refresc del marcador: des del xiulet inicial fins a 2 hores després
+  // (tram en què el partit es juga i el resultat pot canviar), consultem
+  // l'API cada minut. L'endpoint ja evita crides repetides dins del mateix
+  // minut si hi ha diversos usuaris amb la pantalla oberta alhora.
   useEffect(() => {
     if (isFinished) return;
 
     const kickoff = new Date(match.match_date).getTime();
-    const windowStart = kickoff + 50 * 60_000;
+    const windowStart = kickoff;
     const windowEnd = kickoff + 2 * 60 * 60_000;
 
     const tick = () => {
@@ -140,7 +140,7 @@ export function MatchCard({
             </span>
             <span className="flex items-center gap-1 text-slate-400 text-xs">
               <MapPin className="w-3 h-3" />
-              {isHome ? 'Camp Nou / Estadi' : 'A domicili'}
+              {isHome ? 'Camp Nou / Estadi' : 'Visitant'}
             </span>
           </div>
 
@@ -182,28 +182,20 @@ export function MatchCard({
               </div>
             ) : isStarted ? (
               <div className="flex flex-col items-center">
-                {match.status === 'live' ? (
-                  <>
-                    <span className="relative flex h-3.5 w-3.5 mb-1">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-rose-500"></span>
-                    </span>
-                    {match.goals_barca !== null && match.goals_rival !== null && (
-                      <span className="text-lg font-bold text-slate-900 tracking-tight">
-                        {isHome
-                          ? `${match.goals_barca} - ${match.goals_rival}`
-                          : `${match.goals_rival} - ${match.goals_barca}`}
-                      </span>
-                    )}
-                    <span className="text-xs font-bold text-rose-600 uppercase tracking-widest">
-                      Directe
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide text-center leading-tight">
-                    Per confirmar
+                <span className="relative flex h-3.5 w-3.5 mb-1">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-rose-500"></span>
+                </span>
+                {match.goals_barca !== null && match.goals_rival !== null && (
+                  <span className="text-lg font-bold text-slate-900 tracking-tight">
+                    {isHome
+                      ? `${match.goals_barca} - ${match.goals_rival}`
+                      : `${match.goals_rival} - ${match.goals_barca}`}
                   </span>
                 )}
+                <span className="text-xs font-bold text-rose-600 uppercase tracking-widest">
+                  En Joc
+                </span>
                 <button
                   type="button"
                   onClick={handleRefreshScore}

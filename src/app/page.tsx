@@ -19,17 +19,22 @@ export default function HomePage() {
 
   const supabase = createClient();
 
-  const loadData = async () => {
+  const loadData = async (isInitial = false) => {
     try {
-      setLoading(true);
+      if (isInitial) setLoading(true);
 
       // 1. Pròxim partit i classificació en paral·lel (són independents)
-      const nowIso = new Date().toISOString();
+      // Fem servir l'inici del dia d'avui (no l'instant actual) com a límit
+      // inferior perquè el partit en joc o el que ja ha acabat avui es
+      // continuï mostrant; en avançar el dia, el llindar deixa fora el
+      // partit d'ahir i apareix automàticament el següent de forma natural.
+      const now = new Date();
+      const startOfTodayIso = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
       const [{ data: matches }, { data: leadData }] = await Promise.all([
         supabase
           .from('matches')
           .select('*')
-          .gte('match_date', nowIso)
+          .gte('match_date', startOfTodayIso)
           .order('match_date', { ascending: true })
           .limit(1),
         supabase.from('leaderboard').select('*').limit(3),
@@ -60,12 +65,12 @@ export default function HomePage() {
     } catch (err) {
       console.error('Error carregant dades:', err);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadData(true);
   }, [currentUser?.id]);
 
   return (
