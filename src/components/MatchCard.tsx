@@ -117,8 +117,8 @@ export function MatchCard({
 
   // Auto-refresc del marcador: des del xiulet inicial fins a 2 hores després
   // (tram en què el partit es juga i el resultat pot canviar), consultem
-  // l'API cada minut. L'endpoint ja evita crides repetides dins del mateix
-  // minut si hi ha diversos usuaris amb la pantalla oberta alhora.
+  // l'API cada dos minuts. L'endpoint ja evita crides repetides dins del
+  // mateix minut si hi ha diversos usuaris amb la pantalla oberta alhora.
   useEffect(() => {
     if (isFinished) return;
 
@@ -134,7 +134,7 @@ export function MatchCard({
     };
 
     tick();
-    const interval = setInterval(tick, 60_000);
+    const interval = setInterval(tick, 2 * 60_000);
     return () => clearInterval(interval);
   }, [match.match_date, isFinished]);
 
