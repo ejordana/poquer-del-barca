@@ -25,46 +25,41 @@ export default function PartitsPage() {
     try {
       setLoading(true);
 
-      // Obtenir tots els partits
-      const { data: matchesData } = await supabase
-        .from('matches')
-        .select('*')
-        .order('match_date', { ascending: tab === 'upcoming' });
+      // Obtenir tots els partits i les porres de l'usuari actiu en paral·lel
+      // (les porres de l'usuari no depenen de la llista de partits, només del seu id).
+      const [{ data: matchesData }, { data: betsData }] = await Promise.all([
+        supabase.from('matches').select('*').order('match_date', { ascending: tab === 'upcoming' }),
+        currentUser
+          ? supabase.from('bets').select('*').eq('user_id', currentUser.id)
+          : Promise.resolve({ data: [] }),
+      ]);
 
       const allMatches = (matchesData as Match[]) || [];
       setMatches(allMatches);
 
-      // Obtenir porres de l'usuari actiu
-      if (currentUser && allMatches.length > 0) {
-        const { data: betsData } = await supabase
+      const betsMap: Record<string, Bet> = {};
+      betsData?.forEach((b: any) => {
+        betsMap[b.match_id] = b;
+      });
+      setUserBets(betsMap);
+
+      // Porres de tota la família per a tots els partits (depèn dels ids de dalt).
+      const matchIds = allMatches.map((m) => m.id);
+
+      if (matchIds.length > 0) {
+        const { data: allFamilyBets } = await supabase
           .from('bets')
-          .select('*')
-          .eq('user_id', currentUser.id);
+          .select('*, profile:profiles(*)')
+          .in('match_id', matchIds);
 
-        const betsMap: Record<string, Bet> = {};
-        betsData?.forEach((b: any) => {
-          betsMap[b.match_id] = b;
+        const famMap: Record<string, Bet[]> = {};
+        allFamilyBets?.forEach((b: any) => {
+          if (!famMap[b.match_id]) famMap[b.match_id] = [];
+          famMap[b.match_id].push(b);
         });
-        setUserBets(betsMap);
-
-        // Obtenir totes les porres de la família per a tots els partits.
-        // La MatchCard s'encarrega d'amagar les prediccions fins que el partit comença;
-        // abans només mostra qui ja ha apostat.
-        const matchIds = allMatches.map((m) => m.id);
-
-        if (matchIds.length > 0) {
-          const { data: allFamilyBets } = await supabase
-            .from('bets')
-            .select('*, profile:profiles(*)')
-            .in('match_id', matchIds);
-
-          const famMap: Record<string, Bet[]> = {};
-          allFamilyBets?.forEach((b: any) => {
-            if (!famMap[b.match_id]) famMap[b.match_id] = [];
-            famMap[b.match_id].push(b);
-          });
-          setFamilyBets(famMap);
-        }
+        setFamilyBets(famMap);
+      } else {
+        setFamilyBets({});
       }
     } catch (err) {
       console.error('Error carregant partits:', err);

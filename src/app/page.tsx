@@ -23,51 +23,40 @@ export default function HomePage() {
     try {
       setLoading(true);
 
-      // 1. Pròxim partit
+      // 1. Pròxim partit i classificació en paral·lel (són independents)
       const nowIso = new Date().toISOString();
-      const { data: matches } = await supabase
-        .from('matches')
-        .select('*')
-        .gte('match_date', nowIso)
-        .order('match_date', { ascending: true })
-        .limit(1);
+      const [{ data: matches }, { data: leadData }] = await Promise.all([
+        supabase
+          .from('matches')
+          .select('*')
+          .gte('match_date', nowIso)
+          .order('match_date', { ascending: true })
+          .limit(1),
+        supabase.from('leaderboard').select('*').limit(3),
+      ]);
 
       const next = matches && matches.length > 0 ? (matches[0] as Match) : null;
       setNextMatch(next);
-
-      // 2. Porra de l'usuari per al pròxim partit
-      if (currentUser && next) {
-        const { data: bet } = await supabase
-          .from('bets')
-          .select('*')
-          .eq('user_id', currentUser.id)
-          .eq('match_id', next.id)
-          .maybeSingle();
-
-        setUserBet(bet as Bet | null);
-      } else {
-        setUserBet(null);
-      }
-
-      // 3. Totes les porres del pròxim partit (per veure qui ha apostat)
-      if (next) {
-        const { data: allBets } = await supabase
-          .from('bets')
-          .select('*, profile:profiles(*)')
-          .eq('match_id', next.id);
-
-        setNextMatchBets((allBets as Bet[]) || []);
-      } else {
-        setNextMatchBets([]);
-      }
-
-      // 4. Classificació
-      const { data: leadData } = await supabase
-        .from('leaderboard')
-        .select('*')
-        .limit(3);
-
       if (leadData) setLeaderboard(leadData as LeaderboardEntry[]);
+
+      // 2. Porra de l'usuari i porres de tota la família per al pròxim partit,
+      // també en paral·lel (una no depèn de l'altra).
+      const [betResult, allBetsResult] = await Promise.all([
+        currentUser && next
+          ? supabase
+              .from('bets')
+              .select('*')
+              .eq('user_id', currentUser.id)
+              .eq('match_id', next.id)
+              .maybeSingle()
+          : Promise.resolve({ data: null }),
+        next
+          ? supabase.from('bets').select('*, profile:profiles(*)').eq('match_id', next.id)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      setUserBet((betResult.data as Bet | null) ?? null);
+      setNextMatchBets((allBetsResult.data as Bet[]) || []);
     } catch (err) {
       console.error('Error carregant dades:', err);
     } finally {
