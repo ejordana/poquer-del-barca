@@ -21,9 +21,9 @@ export default function PartitsPage() {
 
   const supabase = createClient();
 
-  const loadData = async () => {
+  const loadData = async (isInitial = false) => {
     try {
-      setLoading(true);
+      if (isInitial) setLoading(true);
 
       // Obtenir tots els partits i les porres de l'usuari actiu en paral·lel
       // (les porres de l'usuari no depenen de la llista de partits, només del seu id).
@@ -64,12 +64,12 @@ export default function PartitsPage() {
     } catch (err) {
       console.error('Error carregant partits:', err);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadData(true);
   }, [tab, currentUser?.id]);
 
   // Reiniciar la paginació quan es canvia de pestanya o de filtre de competició
