@@ -51,12 +51,11 @@ export async function POST(request: Request) {
         });
       }
 
-      try {
-        matchesToSync = await fetchBarcaMatchesFromApi(apiKey!);
-      } catch (apiErr: any) {
-        console.warn('Error amb football-data.org API, usant dades de mostra com a alternativa:', apiErr.message);
-        matchesToSync = getSampleBarcaMatches();
-      }
+      // Si la crida real falla, NO substituïm silenciosament per dades de
+      // mostra: fer-ho amagaria l'error i deixaria el marcador en directe
+      // sense actualitzar sense que ningú se n'adonés. Millor deixar que
+      // l'error es propagui perquè l'usuari vegi el missatge de fallada.
+      matchesToSync = await fetchBarcaMatchesFromApi(apiKey!);
 
       await supabase
         .from('sync_state')
