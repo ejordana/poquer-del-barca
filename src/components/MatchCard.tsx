@@ -5,7 +5,7 @@ import { Match, Bet } from '@/types/database';
 import { calculateBetPoints, getLivePointsBadgeInfo, getPointsBadgeInfo } from '@/lib/scoring';
 import { BetModal } from './BetModal';
 import { useUser } from '@/context/UserContext';
-import { Calendar, MapPin, ChevronDown, ChevronUp, Lock, CheckCircle2, Sparkles, RefreshCw } from 'lucide-react';
+import { Calendar, MapPin, ChevronDown, ChevronUp, Lock, CheckCircle2, Sparkles } from 'lucide-react';
 
 interface MatchCardProps {
   match: Match;
@@ -24,8 +24,6 @@ export function MatchCard({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFamilyBets, setShowFamilyBets] = useState(false);
   const [nowTs, setNowTs] = useState(() => Date.now());
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   // Mantenim l'última versió d'onBetUpdated en una ref perquè el temporitzador
   // no s'hagi de reprogramar cada cop que el pare es torna a dibuixar.
@@ -68,7 +66,9 @@ export function MatchCard({
     hour12: false,
   }).format(matchDate);
 
-  const isLive = !isFinished && isStarted && match.goals_barca !== null && match.goals_rival !== null;
+  // "En Joc" ve donat directament pel que retorna l'API (sincronitzada via
+  // el botó de refresc de la pàgina inicial), no per una estimació d'hores.
+  const isLive = match.status === 'live';
 
   const pointsInfo = isFinished && userBet
     ? getPointsBadgeInfo(userBet.points_earned)
@@ -82,61 +82,6 @@ export function MatchCard({
         )
       )
     : null;
-
-  const handleRefreshScore = async (silent = false) => {
-    setIsRefreshing(true);
-    if (!silent) setRefreshError(null);
-    try {
-      const res = await fetch('/api/sync-matches', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(data.error || `Error del servidor (${res.status})`);
-      }
-
-      if (data.skipped && !silent) {
-        setRefreshError('Ja s\'ha sincronitzat fa menys d\'un minut, torna-ho a provar en uns segons.');
-      }
-
-      onBetUpdatedRef.current?.();
-    } catch (err: any) {
-      console.error('Error refrescant el marcador:', err);
-      if (!silent) setRefreshError(err.message || 'No s\'ha pogut refrescar el marcador.');
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  const handleRefreshScoreRef = useRef(handleRefreshScore);
-  handleRefreshScoreRef.current = handleRefreshScore;
-
-  // Auto-refresc del marcador: des del xiulet inicial fins a 2 hores després
-  // (tram en què el partit es juga i el resultat pot canviar), consultem
-  // l'API cada dos minuts. L'endpoint ja evita crides repetides dins del
-  // mateix minut si hi ha diversos usuaris amb la pantalla oberta alhora.
-  useEffect(() => {
-    if (isFinished) return;
-
-    const kickoff = new Date(match.match_date).getTime();
-    const windowStart = kickoff;
-    const windowEnd = kickoff + 2 * 60 * 60_000;
-
-    const tick = () => {
-      const now = Date.now();
-      if (now >= windowStart && now <= windowEnd) {
-        handleRefreshScoreRef.current(true);
-      }
-    };
-
-    tick();
-    const interval = setInterval(tick, 2 * 60_000);
-    return () => clearInterval(interval);
-  }, [match.match_date, isFinished]);
 
   const matchResult =
     isFinished && match.goals_barca !== null && match.goals_rival !== null
@@ -207,7 +152,7 @@ export function MatchCard({
                   {matchResult === 'win' ? 'Victòria' : matchResult === 'loss' ? 'Derrota' : 'Empat'}
                 </span>
               </div>
-            ) : isStarted ? (
+            ) : isLive ? (
               <div className="flex flex-col items-center">
                 <span className="relative flex h-3.5 w-3.5 mb-1">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
@@ -223,20 +168,6 @@ export function MatchCard({
                 <span className="text-xs font-bold text-rose-600 uppercase tracking-widest whitespace-nowrap">
                   En Joc
                 </span>
-                <button
-                  type="button"
-                  onClick={() => handleRefreshScore(false)}
-                  disabled={isRefreshing}
-                  aria-label="Refrescar marcador"
-                  className="mt-1 flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 transition-all active:scale-90 disabled:opacity-50"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                </button>
-                {refreshError && (
-                  <span className="mt-1 max-w-[110px] text-center text-[10px] font-semibold text-rose-500 leading-tight">
-                    {refreshError}
-                  </span>
-                )}
               </div>
             ) : (
               <span className="text-sm font-bold text-slate-300">VS</span>

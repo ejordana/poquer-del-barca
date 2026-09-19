@@ -7,7 +7,7 @@ import { Match, Bet, LeaderboardEntry } from '@/types/database';
 import { MatchCard } from '@/components/MatchCard';
 import { LeaderboardTable } from '@/components/LeaderboardTable';
 import { useUser } from '@/context/UserContext';
-import { Trophy, Calendar, ChevronRight, Loader2 } from 'lucide-react';
+import { Trophy, Calendar, ChevronRight, Loader2, RefreshCw } from 'lucide-react';
 
 export default function HomePage() {
   const { currentUser } = useUser();
@@ -19,6 +19,8 @@ export default function HomePage() {
   const [upcomingMatchBets, setUpcomingMatchBets] = useState<Bet[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -94,6 +96,40 @@ export default function HomePage() {
     loadData(true);
   }, [currentUser?.id]);
 
+  // Únic punt de l'app que crida l'API real de resultats: en prémer aquest
+  // botó consultem football-data.org, actualitzem l'estat/marcador del
+  // partit a la base de dades i recarreguem les dades locals. L'estat "En
+  // Joc" que es mostra a MatchCard ve directament del que retorni aquí
+  // l'API, no d'una estimació basada en l'hora.
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    setRefreshError(null);
+    try {
+      const res = await fetch('/api/sync-matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || `Error del servidor (${res.status})`);
+      }
+
+      if (data.skipped) {
+        setRefreshError("Ja s'ha sincronitzat fa menys d'un minut, torna-ho a provar en uns segons.");
+      }
+
+      await loadData();
+    } catch (err: any) {
+      console.error('Error refrescant el marcador:', err);
+      setRefreshError(err.message || 'No s\'ha pogut refrescar el marcador.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
 
@@ -104,14 +140,30 @@ export default function HomePage() {
             <Calendar className="w-5 h-5 text-barca-blue" />
             Pròxim Partit
           </h2>
-          <Link
-            href="/partits"
-            className="text-xs font-bold text-barca-blue hover:underline flex items-center gap-0.5"
-          >
-            Veure calendari
-            <ChevronRight className="w-4 h-4" />
-          </Link>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isRefreshing || loading}
+              aria-label="Refrescar estat i marcador del partit"
+              className="flex items-center gap-1 text-xs font-bold text-barca-blue hover:underline disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refrescar
+            </button>
+            <Link
+              href="/partits"
+              className="text-xs font-bold text-barca-blue hover:underline flex items-center gap-0.5"
+            >
+              Veure calendari
+              <ChevronRight className="w-4 h-4" />
+            </Link>
+          </div>
         </div>
+
+        {refreshError && (
+          <p className="px-1 text-xs font-semibold text-rose-500">{refreshError}</p>
+        )}
 
         {loading ? (
           <div className="flex h-40 items-center justify-center rounded-2xl bg-white border border-slate-200">
