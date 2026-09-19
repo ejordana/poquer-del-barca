@@ -146,6 +146,23 @@ export function AdminMatchEditor({ matches, onMatchesChanged }: AdminMatchEditor
     }
   };
 
+  // Format curt de data per identificar cada partit al desplegable
+  // (ex: 15 mar 2026, 21:00h)
+  const formatMatchDate = (iso: string) => {
+    const date = new Date(iso);
+    const datePart = new Intl.DateTimeFormat('ca-ES', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }).format(date);
+    const timePart = new Intl.DateTimeFormat('ca-ES', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date);
+    return `${datePart}, ${timePart}h`;
+  };
+
   // Sincronitzar
   const handleSync = async (useSample = false) => {
     setIsSyncing(true);
@@ -199,7 +216,7 @@ export function AdminMatchEditor({ matches, onMatchesChanged }: AdminMatchEditor
               >
                 {matches.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.competition} | {m.home_away === 'HOME' ? `Barça vs ${m.rival}` : `${m.rival} vs Barça`} ({m.status})
+                    {formatMatchDate(m.match_date)} — {m.competition} | {m.home_away === 'HOME' ? `Barça vs ${m.rival}` : `${m.rival} vs Barça`} ({m.status})
                   </option>
                 ))}
               </select>
