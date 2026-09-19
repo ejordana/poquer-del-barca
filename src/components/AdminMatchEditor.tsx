@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Match, HomeAway, MatchStatus } from '@/types/database';
-import { PlusCircle, RefreshCw, Save, CheckCircle, AlertTriangle } from 'lucide-react';
+import { PlusCircle, RefreshCw, Save, CheckCircle, AlertTriangle, Trash2 } from 'lucide-react';
 
 interface AdminMatchEditorProps {
   matches: Match[];
@@ -29,6 +29,7 @@ export function AdminMatchEditor({ matches, onMatchesChanged }: AdminMatchEditor
   const [editGoalsRival, setEditGoalsRival] = useState<number>(0);
   const [isSavingScore, setIsSavingScore] = useState(false);
   const [scoreMessage, setScoreMessage] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const supabase = createClient();
 
@@ -111,6 +112,37 @@ export function AdminMatchEditor({ matches, onMatchesChanged }: AdminMatchEditor
       setScoreMessage('Error: ' + err.message);
     } finally {
       setIsSavingScore(false);
+    }
+  };
+
+  // Eliminar el partit seleccionat (les porres associades s'esborren en
+  // cascada gràcies a la clau forana ON DELETE CASCADE de bets.match_id).
+  const handleDeleteMatch = async () => {
+    if (!selectedMatchId) return;
+
+    const match = matches.find((m) => m.id === selectedMatchId);
+    const label = match
+      ? `${match.home_away === 'HOME' ? `Barça vs ${match.rival}` : `${match.rival} vs Barça`}`
+      : 'aquest partit';
+
+    if (!confirm(`Segur que vols eliminar ${label}? També s'esborraran totes les porres fetes per aquest partit. Aquesta acció no es pot desfer.`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setScoreMessage(null);
+
+    try {
+      const { error } = await supabase.from('matches').delete().eq('id', selectedMatchId);
+      if (error) throw error;
+
+      setScoreMessage('Partit eliminat correctament.');
+      onMatchesChanged();
+    } catch (err: any) {
+      console.error(err);
+      setScoreMessage('Error eliminant el partit: ' + err.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -223,7 +255,7 @@ export function AdminMatchEditor({ matches, onMatchesChanged }: AdminMatchEditor
             <button
               type="button"
               onClick={handleSaveScore}
-              disabled={isSavingScore}
+              disabled={isSavingScore || isDeleting}
               className="w-full h-10 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isSavingScore ? (
@@ -232,6 +264,16 @@ export function AdminMatchEditor({ matches, onMatchesChanged }: AdminMatchEditor
                 <CheckCircle className="w-4 h-4" />
               )}
               <span>GUARDAR RESULTAT I RESOLDRE PUNTS</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDeleteMatch}
+              disabled={isDeleting || isSavingScore}
+              className="w-full h-10 rounded-2xl bg-white hover:bg-rose-50 text-rose-600 font-bold text-sm border border-rose-200 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isDeleting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              <span>ELIMINAR AQUEST PARTIT</span>
             </button>
 
             {scoreMessage && (
