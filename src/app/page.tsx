@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Match, Bet, LeaderboardEntry } from '@/types/database';
@@ -96,14 +96,15 @@ export default function HomePage() {
     loadData(true);
   }, [currentUser?.id]);
 
-  // Únic punt de l'app que crida l'API real de resultats: en prémer aquest
-  // botó consultem football-data.org, actualitzem l'estat/marcador del
-  // partit a la base de dades i recarreguem les dades locals. L'estat "En
-  // Joc" que es mostra a MatchCard ve directament del que retorni aquí
-  // l'API, no d'una estimació basada en l'hora.
-  const handleRefresh = async () => {
+  // Punt de l'app que crida l'API real de resultats: consultem
+  // football-data.org, actualitzem l'estat/marcador del partit a la base de
+  // dades i recarreguem les dades locals. L'estat "En Joc" que es mostra a
+  // MatchCard ve directament del que retorni aquí l'API, no d'una estimació
+  // basada en l'hora. En mode silenciós (auto-refresc) no mostrem errors ni
+  // l'avís de "ja sincronitzat fa menys d'un minut", perquè és esperat.
+  const handleRefresh = async (silent = false) => {
     setIsRefreshing(true);
-    setRefreshError(null);
+    if (!silent) setRefreshError(null);
     try {
       const res = await fetch('/api/sync-matches', {
         method: 'POST',
@@ -117,18 +118,61 @@ export default function HomePage() {
         throw new Error(data.error || `Error del servidor (${res.status})`);
       }
 
-      if (data.skipped) {
+      if (data.skipped && !silent) {
         setRefreshError("Ja s'ha sincronitzat fa menys d'un minut, torna-ho a provar en uns segons.");
       }
 
       await loadData();
     } catch (err: any) {
       console.error('Error refrescant el marcador:', err);
-      setRefreshError(err.message || 'No s\'ha pogut refrescar el marcador.');
+      if (!silent) setRefreshError(err.message || 'No s\'ha pogut refrescar el marcador.');
     } finally {
       setIsRefreshing(false);
     }
   };
+
+  const handleRefreshRef = useRef(handleRefresh);
+  handleRefreshRef.current = handleRefresh;
+
+  // Auto-refresc del marcador en directe: des del xiulet inicial fins a 3,5
+  // hores després (marge ampli per cobrir pròrrogues, retards i aturades),
+  // consultem l'API cada dos minuts mentre el pròxim partit no consti com a
+  // finalitzat. Passat aquest marge deixem de sondejar automàticament
+  // (l'usuari sempre pot refrescar a mà).
+  //
+  // Els mòbils congelen els temporitzadors JS quan la pantalla es bloqueja o
+  // l'app passa a segon pla, així que el setInterval pot quedar-se aturat
+  // molt més de 2 minuts sense que ningú se n'adoni. Per això, a més del
+  // temporitzador, escoltem quan la pestanya torna a fer-se visible per
+  // forçar un refresc immediat en comptes d'esperar el proper tick.
+  useEffect(() => {
+    if (!nextMatch || nextMatch.status === 'finished') return;
+
+    const kickoff = new Date(nextMatch.match_date).getTime();
+    const windowEnd = kickoff + 3.5 * 60 * 60_000;
+
+    const tick = () => {
+      const now = Date.now();
+      if (now >= kickoff && now <= windowEnd) {
+        handleRefreshRef.current(true);
+      }
+    };
+
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+
+    tick();
+    const interval = setInterval(tick, 2 * 60_000);
+    document.addEventListener('visibilitychange', handleVisible);
+    window.addEventListener('focus', handleVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisible);
+      window.removeEventListener('focus', handleVisible);
+    };
+  }, [nextMatch?.id, nextMatch?.match_date, nextMatch?.status]);
 
   return (
     <div className="space-y-4">
@@ -143,7 +187,7 @@ export default function HomePage() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={handleRefresh}
+              onClick={() => handleRefresh()}
               disabled={isRefreshing || loading}
               aria-label="Refrescar estat i marcador del partit"
               className="flex items-center gap-1 text-xs font-bold text-barca-blue hover:underline disabled:opacity-50"
