@@ -4,13 +4,18 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { LeaderboardEntry } from '@/types/database';
 import { LeaderboardTable } from '@/components/LeaderboardTable';
+import { PositionEvolutionChart, EvolutionJornada, EvolutionSeries } from '@/components/PositionEvolutionChart';
 import { SCORING_RULES, sortLeaderboard, computeRanks } from '@/lib/scoring';
-import { Trophy, HelpCircle, Loader2, Ham } from 'lucide-react';
+import { Trophy, HelpCircle, Loader2, Ham, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function ClassificacioPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [previousRanks, setPreviousRanks] = useState<Record<string, number> | undefined>(undefined);
+  const [evolutionJornadas, setEvolutionJornadas] = useState<EvolutionJornada[]>([]);
+  const [evolutionSeries, setEvolutionSeries] = useState<EvolutionSeries[]>([]);
+  const [totalPlayers, setTotalPlayers] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showRules, setShowRules] = useState(false);
 
   const supabase = createClient();
 
@@ -72,8 +77,119 @@ export default function ClassificacioPage() {
     }
   };
 
+  // Reconstrueix, jornada a jornada, la posició de cada jugador tal com
+  // hauria sortit la classificació just després de cada partit finalitzat
+  // (mateixos criteris d'ordenació que la vista `leaderboard`).
+  const loadEvolution = async () => {
+    try {
+      const { data: profiles } = await supabase.from('profiles').select('id, nom');
+      const { data: finished } = await supabase
+        .from('matches')
+        .select('id, match_date')
+        .eq('status', 'finished')
+        .order('match_date', { ascending: true });
+
+      if (!profiles || !finished || finished.length < 2) {
+        setEvolutionJornadas([]);
+        setEvolutionSeries([]);
+        setTotalPlayers(profiles?.length || 0);
+        return;
+      }
+
+      const matchIds = finished.map((m) => m.id);
+      const { data: bets } = await supabase
+        .from('bets')
+        .select('user_id, match_id, points_earned')
+        .in('match_id', matchIds)
+        .not('points_earned', 'is', null);
+
+      const betsByMatch: Record<string, Record<string, number>> = {};
+      (bets || []).forEach((b: any) => {
+        if (!betsByMatch[b.match_id]) betsByMatch[b.match_id] = {};
+        betsByMatch[b.match_id][b.user_id] = b.points_earned;
+      });
+
+      const betsCountByUser: Record<string, number> = {};
+      (bets || []).forEach((b: any) => {
+        betsCountByUser[b.user_id] = (betsCountByUser[b.user_id] || 0) + 1;
+      });
+
+      const running: Record<
+        string,
+        { total_points: number; exact_hits: number; outcome_hits: number; nom: string }
+      > = {};
+      profiles.forEach((p) => {
+        running[p.id] = { total_points: 0, exact_hits: 0, outcome_hits: 0, nom: p.nom };
+      });
+
+      const ranksByUser: Record<string, number[]> = {};
+      profiles.forEach((p) => {
+        ranksByUser[p.id] = [];
+      });
+
+      const jornadas: EvolutionJornada[] = finished.map((m) => {
+        const betsThisMatch = betsByMatch[m.id] || {};
+        Object.entries(betsThisMatch).forEach(([userId, points]) => {
+          const r = running[userId];
+          if (!r) return;
+          r.total_points += points;
+          if (points >= SCORING_RULES.EXACT_SCORE) r.exact_hits += 1;
+          if (points === SCORING_RULES.CORRECT_OUTCOME) r.outcome_hits += 1;
+        });
+
+        const sorted = sortLeaderboard(
+          Object.entries(running).map(([user_id, v]) => ({ user_id, ...v }))
+        );
+        const ranks = computeRanks(sorted);
+        sorted.forEach((e, i) => {
+          ranksByUser[e.user_id].push(ranks[i]);
+        });
+
+        const date = new Date(m.match_date);
+        const label = new Intl.DateTimeFormat('ca-ES', { day: 'numeric', month: 'numeric' }).format(date);
+
+        return { matchId: m.id, label };
+      });
+
+      // Descartem les jornades inicials en què encara ningú havia fet cap
+      // porra (ex: partits ja finalitzats abans que la família comencés a
+      // fer servir l'app): tothom hi surt empatat i no aporten cap
+      // informació, només allarguen el gràfic sense necessitat.
+      const startIndex = finished.findIndex(
+        (m) => Object.keys(betsByMatch[m.id] || {}).length > 0
+      );
+      const trimStart = startIndex === -1 ? finished.length : startIndex;
+      const trimmedJornadas = jornadas.slice(trimStart);
+
+      if (trimmedJornadas.length < 2) {
+        setEvolutionJornadas([]);
+        setEvolutionSeries([]);
+        setTotalPlayers(profiles.length);
+        return;
+      }
+
+      // Només mostrem la línia de qui ha fet almenys una porra: algú que
+      // mai ha apostat no aporta cap evolució interessant al gràfic, encara
+      // que la seva posició (sempre al fons, empatada) afecti la resta.
+      const series: EvolutionSeries[] = profiles
+        .filter((p) => (betsCountByUser[p.id] || 0) > 0)
+        .map((p) => ({
+          userId: p.id,
+          nom: p.nom,
+          ranks: ranksByUser[p.id].slice(trimStart),
+        }));
+
+      setEvolutionJornadas(trimmedJornadas);
+      setEvolutionSeries(series);
+      setTotalPlayers(profiles.length);
+    } catch (err) {
+      console.error("Error carregant l'evolució de posicions:", err);
+    }
+  };
+
   useEffect(() => {
     loadLeaderboard();
+    loadEvolution();
 
     // Supabase Realtime
     const channel = supabase
@@ -81,12 +197,18 @@ export default function ClassificacioPage() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bets' },
-        () => loadLeaderboard()
+        () => {
+          loadLeaderboard();
+          loadEvolution();
+        }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'profiles' },
-        () => loadLeaderboard()
+        () => {
+          loadLeaderboard();
+          loadEvolution();
+        }
       )
       .subscribe();
 
@@ -118,13 +240,35 @@ export default function ClassificacioPage() {
         <LeaderboardTable entries={entries} previousRanks={previousRanks} />
       )}
 
-      {/* Targeta senzilla de com sumen els punts */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
-        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-          <HelpCircle className="w-4 h-4 text-barca-blue" />
-          Com es guanyen els punts?
-        </h3>
+      {/* Evolució de posicions al llarg de les jornades */}
+      {!loading && (
+        <PositionEvolutionChart
+          jornadas={evolutionJornadas}
+          series={evolutionSeries}
+          totalPlayers={totalPlayers}
+        />
+      )}
 
+      {/* Targeta senzilla de com sumen els punts (col·lapsada per defecte) */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+        <button
+          type="button"
+          onClick={() => setShowRules((v) => !v)}
+          className="flex items-center justify-between w-full"
+        >
+          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <HelpCircle className="w-4 h-4 text-barca-blue" />
+            Com es guanyen els punts?
+          </h3>
+          {showRules ? (
+            <ChevronUp className="w-5 h-5 text-slate-400" />
+          ) : (
+            <ChevronDown className="w-5 h-5 text-slate-400" />
+          )}
+        </button>
+
+        {showRules && (
+          <>
         <div className="grid gap-2.5 sm:grid-cols-2">
           <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-100">
             <div className="flex items-center justify-between mb-1">
@@ -183,6 +327,8 @@ export default function ClassificacioPage() {
             hi hagi hagut al partit.
           </p>
         </div>
+          </>
+        )}
       </div>
     </div>
   );
