@@ -21,6 +21,7 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   const supabase = createClient();
 
@@ -118,8 +119,12 @@ export default function HomePage() {
         throw new Error(data.error || `Error del servidor (${res.status})`);
       }
 
-      if (data.skipped && !silent) {
-        setRefreshError("Ja s'ha sincronitzat fa menys d'un minut, torna-ho a provar en uns segons.");
+      if (data.skipped) {
+        if (!silent) {
+          setRefreshError("Ja s'ha sincronitzat fa menys d'un minut, torna-ho a provar en uns segons.");
+        }
+      } else {
+        setLastSyncedAt(new Date());
       }
 
       await loadData();
@@ -134,11 +139,10 @@ export default function HomePage() {
   const handleRefreshRef = useRef(handleRefresh);
   handleRefreshRef.current = handleRefresh;
 
-  // Auto-refresc del marcador en directe: des del xiulet inicial fins a 3,5
-  // hores després (marge ampli per cobrir pròrrogues, retards i aturades),
-  // consultem l'API cada dos minuts mentre el pròxim partit no consti com a
-  // finalitzat. Passat aquest marge deixem de sondejar automàticament
-  // (l'usuari sempre pot refrescar a mà).
+  // Auto-refresc del marcador en directe: des del xiulet inicial fins a 1
+  // hora després, consultem l'API cada dos minuts mentre el pròxim partit no
+  // consti com a finalitzat. Passat aquest marge deixem de sondejar
+  // automàticament (l'usuari sempre pot refrescar a mà).
   //
   // Els mòbils congelen els temporitzadors JS quan la pantalla es bloqueja o
   // l'app passa a segon pla, així que el setInterval pot quedar-se aturat
@@ -149,7 +153,7 @@ export default function HomePage() {
     if (!nextMatch || nextMatch.status === 'finished') return;
 
     const kickoff = new Date(nextMatch.match_date).getTime();
-    const windowEnd = kickoff + 3.5 * 60 * 60_000;
+    const windowEnd = kickoff + 60 * 60_000;
 
     const tick = () => {
       const now = Date.now();
@@ -204,6 +208,12 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
+
+        {lastSyncedAt && (
+          <p className="px-1 text-[11px] font-semibold text-slate-400">
+            Últim contacte amb l'API: {new Intl.DateTimeFormat('ca-ES', { hour: '2-digit', minute: '2-digit', hour12: false }).format(lastSyncedAt)}h
+          </p>
+        )}
 
         {refreshError && (
           <p className="px-1 text-xs font-semibold text-rose-500">{refreshError}</p>
