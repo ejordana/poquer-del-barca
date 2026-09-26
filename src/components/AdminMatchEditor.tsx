@@ -164,7 +164,7 @@ export function AdminMatchEditor({ matches, onMatchesChanged }: AdminMatchEditor
   };
 
   // Sincronitzar
-  const handleSync = async (useSample = false) => {
+  const handleSync = async () => {
     setIsSyncing(true);
     setSyncMessage(null);
 
@@ -172,7 +172,7 @@ export function AdminMatchEditor({ matches, onMatchesChanged }: AdminMatchEditor
       const res = await fetch('/api/sync-matches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sample: useSample }),
+        body: JSON.stringify({}),
       });
 
       const data = await res.json();
@@ -315,21 +315,12 @@ export function AdminMatchEditor({ matches, onMatchesChanged }: AdminMatchEditor
         <div className="flex flex-wrap gap-2 pt-1">
           <button
             type="button"
-            onClick={() => handleSync(false)}
+            onClick={() => handleSync()}
             disabled={isSyncing}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-barca-blue hover:bg-barca-blue-light text-white text-xs font-bold shadow-xs active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSyncing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             Sincronitzar amb API Oficial
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleSync(true)}
-            disabled={isSyncing}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold border border-slate-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Carregar Partits de Prova
           </button>
         </div>
 

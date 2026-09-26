@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { fetchBarcaMatchesFromApi, getSampleBarcaMatches, NormalizedMatch } from '@/lib/football-api';
+import { fetchBarcaMatchesFromApi, NormalizedMatch } from '@/lib/football-api';
 
 export async function POST(request: Request) {
   try {
@@ -21,49 +21,46 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Comprovar si es demanen dades d'exemple o de l'API real
-    const body = await request.json().catch(() => ({}));
-    const useSample = Boolean(body.sample);
+    // 2. Comprovar que hi ha una API key vàlida configurada
     const apiKey = process.env.FOOTBALL_DATA_API_KEY;
-    const willCallRealApi = !useSample && !!apiKey && apiKey !== 'your_football_data_api_key_here';
-
-    let matchesToSync: NormalizedMatch[] = [];
-
-    if (willCallRealApi) {
-      // Evitem trucar dues vegades a football-data.org dins del mateix minut
-      // (protegim el límit de peticions/minut del pla gratuït).
-      const { data: syncState } = await supabase
-        .from('sync_state')
-        .select('last_synced_at')
-        .eq('id', 1)
-        .maybeSingle();
-
-      const now = new Date();
-      const lastSyncedAt = syncState?.last_synced_at ? new Date(syncState.last_synced_at) : null;
-      const sameMinute =
-        lastSyncedAt && Math.floor(lastSyncedAt.getTime() / 60000) === Math.floor(now.getTime() / 60000);
-
-      if (sameMinute) {
-        return NextResponse.json({
-          success: true,
-          skipped: true,
-          message: "Ja s'havia sincronitzat amb l'API fa menys d'un minut. S'evita repetir la crida.",
-        });
-      }
-
-      // Si la crida real falla, NO substituïm silenciosament per dades de
-      // mostra: fer-ho amagaria l'error i deixaria el marcador en directe
-      // sense actualitzar sense que ningú se n'adonés. Millor deixar que
-      // l'error es propagui perquè l'usuari vegi el missatge de fallada.
-      matchesToSync = await fetchBarcaMatchesFromApi(apiKey!);
-
-      await supabase
-        .from('sync_state')
-        .update({ last_synced_at: now.toISOString() })
-        .eq('id', 1);
-    } else {
-      matchesToSync = getSampleBarcaMatches();
+    if (!apiKey || apiKey === 'your_football_data_api_key_here') {
+      return NextResponse.json(
+        { error: 'Falta configurar FOOTBALL_DATA_API_KEY per sincronitzar els partits.' },
+        { status: 500 }
+      );
     }
+
+    // Evitem trucar dues vegades a football-data.org dins del mateix minut
+    // (protegim el límit de peticions/minut del pla gratuït).
+    const { data: syncState } = await supabase
+      .from('sync_state')
+      .select('last_synced_at')
+      .eq('id', 1)
+      .maybeSingle();
+
+    const now = new Date();
+    const lastSyncedAt = syncState?.last_synced_at ? new Date(syncState.last_synced_at) : null;
+    const sameMinute =
+      lastSyncedAt && Math.floor(lastSyncedAt.getTime() / 60000) === Math.floor(now.getTime() / 60000);
+
+    if (sameMinute) {
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+        message: "Ja s'havia sincronitzat amb l'API fa menys d'un minut. S'evita repetir la crida.",
+      });
+    }
+
+    // Si la crida real falla, NO substituïm silenciosament per dades de
+    // mostra: fer-ho amagaria l'error i deixaria el marcador en directe
+    // sense actualitzar sense que ningú se n'adonés. Millor deixar que
+    // l'error es propagui perquè l'usuari vegi el missatge de fallada.
+    const matchesToSync: NormalizedMatch[] = await fetchBarcaMatchesFromApi(apiKey);
+
+    await supabase
+      .from('sync_state')
+      .update({ last_synced_at: now.toISOString() })
+      .eq('id', 1);
 
     if (!matchesToSync || matchesToSync.length === 0) {
       return NextResponse.json({ message: 'Cap partit trobat per sincronitzar.' });
@@ -182,7 +179,7 @@ export async function POST(request: Request) {
         inserted: insertedCount,
         updated: updatedCount,
         pointsCalculated: pointsCalculatedCount,
-        source: !useSample && apiKey ? 'football-data.org' : 'mostra',
+        source: 'football-data.org',
       },
     });
   } catch (err: any) {
