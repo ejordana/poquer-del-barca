@@ -7,6 +7,18 @@ import { BetModal } from './BetModal';
 import { useUser } from '@/context/UserContext';
 import { Calendar, MapPin, ChevronDown, ChevronUp, Lock, CheckCircle2, Sparkles } from 'lucide-react';
 
+// Format curt del temps que falta fins al xiulet inicial (ex: "3d 4h", "45 min").
+function formatCountdown(ms: number): string {
+  const totalMinutes = Math.floor(ms / 60_000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}min`;
+  return `${minutes}min`;
+}
+
 interface MatchCardProps {
   match: Match;
   userBet?: Bet | null;
@@ -53,6 +65,14 @@ export function MatchCard({
     return () => clearTimeout(timer);
   }, [match.match_date, match.status]);
 
+  // Compte enrere fins al xiulet inicial: refresquem cada minut mentre el
+  // partit encara no hagi començat.
+  useEffect(() => {
+    if (isStarted) return;
+    const interval = setInterval(() => setNowTs(Date.now()), 60_000);
+    return () => clearInterval(interval);
+  }, [isStarted]);
+
   // Format natural en català (ex: Diumenge, 15 març a les 21:00h)
   const dateFormatted = new Intl.DateTimeFormat('ca-ES', {
     weekday: 'long',
@@ -91,6 +111,10 @@ export function MatchCard({
         ? 'loss'
         : 'draw'
       : null;
+
+  const msUntilKickoff = matchDate.getTime() - nowTs;
+  const countdownText =
+    !isStarted && msUntilKickoff > 0 ? formatCountdown(msUntilKickoff) : null;
 
   const resultStyles =
     matchResult === 'win'
@@ -167,6 +191,13 @@ export function MatchCard({
                 )}
                 <span className="text-xs font-bold text-rose-600 uppercase tracking-widest whitespace-nowrap">
                   En Joc
+                </span>
+              </div>
+            ) : countdownText ? (
+              <div className="flex flex-col items-center">
+                <span className="text-sm font-bold text-slate-300">VS</span>
+                <span className="text-[11px] font-bold text-barca-blue whitespace-nowrap">
+                  {countdownText}
                 </span>
               </div>
             ) : (
